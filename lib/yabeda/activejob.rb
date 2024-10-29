@@ -110,7 +110,12 @@ module Yabeda
       case time
       when Time   then time
       when String then Time.parse(time).utc
-      else        ::Rails.version >= "7" ? Time.at(time).utc : Time.parse(time.to_s).utc
+      else
+        if time > 1e12
+          Time.at(ms2s(time)).utc
+        else
+          Time.at(time).utc
+        end
       end
     end
   end
