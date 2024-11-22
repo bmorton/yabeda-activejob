@@ -43,6 +43,11 @@ module Yabeda
                   tags: %i[queue activejob executions],
                   buckets: LONG_RUNNING_JOB_RUNTIME_BUCKETS
 
+        histogram :batch_enqueue_latency, comment: "The job latency, the difference in seconds between enqueued and running time",
+                  unit: :seconds, per: :activejob,
+                  tags: %i[queue activejob executions],
+                  buckets: LONG_RUNNING_JOB_RUNTIME_BUCKETS
+
         # job complete event
         ActiveSupport::Notifications.subscribe "perform.active_job" do |*args|
           event = ActiveSupport::Notifications::Event.new(*args)
@@ -92,6 +97,18 @@ module Yabeda
           labels.merge!(event.payload.slice(*Yabeda.default_tags.keys - labels.keys))
           activejob_enqueued_total.increment(labels)
           activejob_enqueue_latency.measure(labels, event.duration)
+          Yabeda::ActiveJob.after_event_block.call(event) if Yabeda::ActiveJob.after_event_block.respond_to?(:call)
+        end
+
+        ActiveSupport::Notifications.subscribe "enqueue_all.active_job" do |*args|
+          event = ActiveSupport::Notifications::Event.new(*args)
+
+          labels = {
+            adapter: event.payload[:adapter].class.to_s,
+          }
+
+          labels.merge!(event.payload.slice(*Yabeda.default_tags.keys - labels.keys))
+          activejob_batch_enqueue_latency.measure(labels, event.duration)
           Yabeda::ActiveJob.after_event_block.call(event) if Yabeda::ActiveJob.after_event_block.respond_to?(:call)
         end
       end
